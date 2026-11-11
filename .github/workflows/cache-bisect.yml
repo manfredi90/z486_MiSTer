@@ -80,14 +80,36 @@ jobs:
       - name: Timing
         shell: bash
         run: |
-          grep "Worst-case setup slack is" build.log | tee setup.txt
-          worst=$(awk '{print $NF}' setup.txt | sort -g | head -1)
-          [ -n "$worst" ] || { echo "::error::no setup slack in build.log"; exit 1; }
-          echo "worst setup slack: $worst ns" | tee -a "$GITHUB_STEP_SUMMARY"
-          echo "::notice::${{ matrix.variant }} seed ${{ matrix.seed }}: worst setup slack $worst ns"
+          python3 - output_files/z486_mister.sta.summary > setup.txt <<'EOF'
+          # Worst slack per clock from sta.summary; the score is the setup slack
+          # of the CPU clock, as in the upstream seed_sweep.py.
+          import re, sys
+          MAIN = "emu|pll|pll_inst|altera_pll_i|general[0].gpll~PLL_OUTPUT_COUNTER|divclk"
+          worst, kind, clk = {}, "", ""
+          for line in open(sys.argv[1], errors="ignore"):
+              line = line.strip()
+              m = re.match(r"Type\s+:\s+(.*?)\s*(Setup|Hold)\s+'(.+)'", line)
+              if m:
+                  kind, clk = m.group(2), m.group(3)
+                  continue
+              m = re.match(r"Slack\s+:\s+(-?[0-9.]+)", line)
+              if m and kind:
+                  k = (kind, clk)
+                  worst[k] = min(worst.get(k, 1e9), float(m.group(1)))
+          for (k, c), v in sorted(worst.items(), key=lambda x: x[1]):
+              print(f"{k:5} {v:8.3f}  {c}")
+          if ("Setup", MAIN) not in worst:
+              sys.exit("CPU clock not found in sta.summary")
+          print(f"MAIN setup {worst[('Setup', MAIN)]:.3f} hold {worst.get(('Hold', MAIN), float('nan')):.3f}")
+          EOF
+          cat setup.txt
+          worst=$(awk '/^MAIN/{print $3}' setup.txt)
+          hold=$(awk '/^MAIN/{print $5}' setup.txt)
+          echo "CPU clock: setup $worst ns, hold $hold ns" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "::notice::${{ matrix.variant }} seed ${{ matrix.seed }}: CPU clock setup $worst ns, hold $hold ns"
           echo "$worst" > slack.txt
           mkdir -p out
-          cp output_files/z486_mister.rbf out/
+          cp output_files/z486_mister.rbf output_files/z486_mister.sta.summary out/
           cp slack.txt setup.txt out/
 
       - name: Errors and end of log
