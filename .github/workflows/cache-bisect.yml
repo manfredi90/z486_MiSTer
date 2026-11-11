@@ -80,9 +80,9 @@ jobs:
       - name: Timing
         shell: bash
         run: |
-          rpt=output_files/z486_mister.sta.rpt
-          grep -A12 "Slow 1100mV 85C Model Setup Summary" $rpt | grep -E "^; [^;]+; -?[0-9]" | tee setup.txt
-          worst=$(awk -F';' '{gsub(/ /,"",$3); print $3}' setup.txt | sort -g | head -1)
+          grep "Worst-case setup slack is" build.log | tee setup.txt
+          worst=$(awk '{print $NF}' setup.txt | sort -g | head -1)
+          [ -n "$worst" ] || { echo "::error::no setup slack in build.log"; exit 1; }
           echo "worst setup slack: $worst ns" | tee -a "$GITHUB_STEP_SUMMARY"
           echo "::notice::${{ matrix.variant }} seed ${{ matrix.seed }}: worst setup slack $worst ns"
           echo "$worst" > slack.txt
