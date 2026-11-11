@@ -16,6 +16,9 @@ jobs:
       - name: CPU core (src/z486 submodule only)
         run: git submodule update --init --depth 1 src/z486
 
+      - name: PLL files of the production profile (85 MHz)
+        run: cp -r profiles/production/rtl/. rtl/
+
       - name: Free disk space for the Quartus image
         run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
 
