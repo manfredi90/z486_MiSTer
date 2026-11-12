@@ -6,6 +6,8 @@
 #   nowrap    DCACHE_LINE_WRAP = 0: line fills start at dword 0 (no critical word first)
 #   nohuf     no hit-under-fill: VIPT probes wait for the line fill to finish
 #   nodirect  no direct fill from a probe miss: misses take the normal CPU port
+#   noload    direct fill only for microcode reads (direct loads take the CPU port)
+#   noucrd    direct fill only for direct loads (microcode reads take the CPU port)
 name: cache-bisect
 
 on:
@@ -23,7 +25,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [nowrap, nohuf, nodirect]
+        variant: [noload, noucrd]
         seed: [9, 1, 5]
     name: ${{ matrix.variant }} seed ${{ matrix.seed }}
     steps:
@@ -65,6 +67,14 @@ jobs:
               patch_line src/z486/cache_unit.sv \
                 ".vipt_resolve_fill(dcache_vipt_resolve_fill && !dcache_vipt_is_device_mmio)," \
                 ".vipt_resolve_fill(1'b0)," ;;
+            noload)
+              patch_line src/z486/data_access.sv \
+                "    ((vipt_load_ex_r.valid && vipt_load_ex_probed_r &&" \
+                "    ((1'b0 && vipt_load_ex_r.valid && vipt_load_ex_probed_r &&" ;;
+            noucrd)
+              patch_line src/z486/data_access.sv \
+                "     (ucrd_valid_r && !ucrd_x87_r));" \
+                "     (1'b0 && ucrd_valid_r && !ucrd_x87_r));" ;;
           esac
           patch_line z486_mister.qsf \
             "set_global_assignment -name SEED 9" \
@@ -131,7 +141,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [nowrap, nohuf, nodirect]
+        variant: [noload, noucrd]
     name: best ${{ matrix.variant }}
     steps:
       - uses: actions/download-artifact@v4
